@@ -6,7 +6,12 @@ import { MapPin, ShoppingBag, User, LogOut, Radio, Loader2, Camera, CheckCircle,
 // Use dynamic hostname to support local network access (e.g. from mobile)
 // OR use environment variable for Production (Vercel)
 const backendUrl = import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:3001`;
-const socket = io(backendUrl);
+const socket = io(backendUrl, {
+  extraHeaders: {
+    "ngrok-skip-browser-warning": "69420", // For ngrok
+    "Bypass-Tunnel-Reminder": "true"       // For localtunnel
+  }
+});
 
 function App() {
   const [role, setRole] = useState(null); // 'seller' | 'buyer'
