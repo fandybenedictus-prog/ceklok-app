@@ -40,15 +40,7 @@ const MapComponent = ({ myLocation, otherLocations, meetingPoint, onSetMeetingPo
     const defaultCenter = [-0.7893, 113.9213];
     const center = myLocation || defaultCenter;
 
-    // Green Icon for Buyer
-    const greenIcon = new L.Icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    });
+
 
     return (
         <MapContainer center={center} zoom={13} scrollWheelZoom={true} className="h-full w-full z-0">
@@ -91,16 +83,7 @@ const MapComponent = ({ myLocation, otherLocations, meetingPoint, onSetMeetingPo
             ))}
 
             {meetingPoint && (
-                <Marker position={meetingPoint} icon={
-                    new L.Icon({
-                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-gold.png',
-                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-                        iconSize: [25, 41],
-                        iconAnchor: [12, 41],
-                        popupAnchor: [1, -34],
-                        shadowSize: [41, 41]
-                    })
-                }>
+                <Marker position={meetingPoint} icon={goldIcon}>
                     <Popup>
                         <div className="text-center">
                             <h3 className="font-bold text-yellow-600">Meeting Point</h3>

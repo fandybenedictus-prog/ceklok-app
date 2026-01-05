@@ -6,9 +6,7 @@ import App from './App.jsx'
 import ErrorBoundary from './ErrorBoundary'
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>,
 )
