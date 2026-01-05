@@ -5,7 +5,10 @@ import MapComponent from './components/MapComponent';
 import { MapPin, ShoppingBag, User, LogOut, Radio, Loader2, Camera, CheckCircle, Smartphone } from 'lucide-react';
 
 function App() {
-  const [role, setRole] = useState(() => localStorage.getItem('role') || null);
+  const [role, setRole] = useState(() => {
+    const saved = localStorage.getItem('role');
+    return (saved === 'null' || saved === 'undefined') ? null : saved;
+  });
 
   // Persisted States
   const [username, setUsername] = useState(() => localStorage.getItem('username') || '');
@@ -513,6 +516,7 @@ function App() {
       </div>
 
       <MapComponent
+        role={role}
         myLocation={myLocation}
         otherLocations={otherLocations}
         meetingPoint={meetingPoint}
