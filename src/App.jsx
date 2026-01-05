@@ -5,18 +5,18 @@ import MapComponent from './components/MapComponent';
 import { MapPin, ShoppingBag, User, LogOut, Radio, Loader2, Camera, CheckCircle, Smartphone } from 'lucide-react';
 
 function App() {
-  const [role, setRole] = useState(null); // 'seller' | 'buyer'
+  const [role, setRole] = useState(() => localStorage.getItem('role') || null);
 
   // Persisted States
   const [username, setUsername] = useState(() => localStorage.getItem('username') || '');
   const [phone, setPhone] = useState(() => localStorage.getItem('phone') || '');
   const [itemName, setItemName] = useState(() => localStorage.getItem('itemName') || '');
 
-  const [room, setRoom] = useState('');
+  const [room, setRoom] = useState(() => localStorage.getItem('room') || '');
   const [itemImage, setItemImage] = useState(null);
-  const [mapLink, setMapLink] = useState('');
+  const [mapLink, setMapLink] = useState(() => localStorage.getItem('mapLink') || '');
 
-  const [joined, setJoined] = useState(false);
+  const [joined, setJoined] = useState(() => localStorage.getItem('joined') === 'true');
   const [myLocation, setMyLocation] = useState(null);
   const [otherLocations, setOtherLocations] = useState({});
   const [meetingPoint, setMeetingPoint] = useState(null);
@@ -30,12 +30,44 @@ function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchCenter, setSearchCenter] = useState(null);
 
-  // Persist form inputs
+  // Persist States
+  useEffect(() => {
+    if (role) localStorage.setItem('role', role);
+    else localStorage.removeItem('role');
+  }, [role]);
+
+  useEffect(() => {
+    if (room) localStorage.setItem('room', room);
+    else localStorage.removeItem('room');
+  }, [room]);
+
+  useEffect(() => { localStorage.setItem('joined', joined); }, [joined]);
+  useEffect(() => { localStorage.setItem('mapLink', mapLink); }, [mapLink]);
+
   useEffect(() => { localStorage.setItem('username', username); }, [username]);
   useEffect(() => { localStorage.setItem('phone', phone); }, [phone]);
   useEffect(() => { localStorage.setItem('itemName', itemName); }, [itemName]);
 
+  const handleLogout = () => {
+    // Clear session specific items
+    localStorage.removeItem('role');
+    localStorage.removeItem('room');
+    localStorage.removeItem('joined');
+    localStorage.removeItem('mapLink');
+
+    // Reset State
+    setRole(null);
+    setRoom('');
+    setJoined(false);
+    setMapLink('');
+    setTransactionInfo(null);
+    setMeetingPoint(null);
+    setOtherLocations({});
+    // Note: We keep username/phone/itemName in localStorage for convenience
+  };
+
   // --- FIREBASE LOGIC START ---
+
 
   // 1. Listen for Updates (Location, Meeting Point) AFTER Joining
   useEffect(() => {
@@ -263,7 +295,7 @@ function App() {
         <div className="h-screen w-full flex items-center justify-center p-6 bg-gray-50 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden my-auto">
             <div className="p-6 bg-orange-500 text-white relative">
-              <button onClick={() => setRole(null)} className="absolute top-4 left-4 p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
+              <button onClick={handleLogout} className="absolute top-4 left-4 p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
                 <LogOut className="w-4 h-4" />
               </button>
               <h2 className="text-2xl font-bold text-center mt-2">Data Penjual</h2>
@@ -346,7 +378,7 @@ function App() {
       <div className="h-screen w-full flex items-center justify-center p-6 bg-gray-50 overflow-y-auto">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden my-auto">
           <div className="p-6 bg-green-500 text-white relative">
-            <button onClick={() => { setRole(null); setTransactionInfo(null); }} className="absolute top-4 left-4 p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
+            <button onClick={handleLogout} className="absolute top-4 left-4 p-2 bg-white/20 rounded-full hover:bg-white/30 transition">
               <LogOut className="w-4 h-4" />
             </button>
             <h2 className="text-2xl font-bold text-center mt-2">Data Pembeli</h2>
@@ -455,7 +487,7 @@ function App() {
               <p className="text-[10px] text-gray-500">{role === 'seller' ? 'Mode Penjual' : 'Mode Pembeli'}</p>
             </div>
           </div>
-          <button onClick={() => window.location.reload()} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition"><LogOut className="w-4 h-4" /></button>
+          <button onClick={() => { if (window.confirm("Keluar dari transaksi?")) handleLogout(); }} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition"><LogOut className="w-4 h-4" /></button>
         </div>
 
         {/* Seller Notification if Point not set */}
