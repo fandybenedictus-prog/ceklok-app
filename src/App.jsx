@@ -1,17 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
+import { database } from './firebase';
+import { ref, set, onValue, update, get, child } from "firebase/database";
 import MapComponent from './components/MapComponent';
 import { MapPin, ShoppingBag, User, LogOut, Radio, Loader2, Camera, CheckCircle, Smartphone } from 'lucide-react';
-
-// Use dynamic hostname to support local network access (e.g. from mobile)
-// OR use environment variable for Production (Vercel)
-const backendUrl = import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:3001`;
-const socket = io(backendUrl, {
-  extraHeaders: {
-    "ngrok-skip-browser-warning": "69420", // For ngrok
-    "Bypass-Tunnel-Reminder": "true"       // For localtunnel
-  }
-});
 
 function App() {
   const [role, setRole] = useState(null); // 'seller' | 'buyer'
@@ -21,9 +12,9 @@ function App() {
   const [phone, setPhone] = useState(() => localStorage.getItem('phone') || '');
   const [itemName, setItemName] = useState(() => localStorage.getItem('itemName') || '');
 
-  const [room, setRoom] = useState(''); // Room is usually generated or entered fresh
-  const [itemImage, setItemImage] = useState(null); // Base64 string
-  const [mapLink, setMapLink] = useState(''); // Google Maps Link
+  const [room, setRoom] = useState('');
+  const [itemImage, setItemImage] = useState(null);
+  const [mapLink, setMapLink] = useState('');
 
   const [joined, setJoined] = useState(false);
   const [myLocation, setMyLocation] = useState(null);
@@ -37,138 +28,89 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchCenter, setSearchCenter] = useState(null); // [lat, lng] to fly to
-  const [isConnected, setIsConnected] = useState(socket.connected);
-
-  useEffect(() => {
-    const onConnect = () => { setIsConnected(true); addLog("Socket Connected"); };
-    const onDisconnect = () => { setIsConnected(false); addLog("Socket Disconnected"); };
-
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-    }
-  }, []);
+  const [searchCenter, setSearchCenter] = useState(null);
 
   // Persist form inputs
   useEffect(() => { localStorage.setItem('username', username); }, [username]);
   useEffect(() => { localStorage.setItem('phone', phone); }, [phone]);
   useEffect(() => { localStorage.setItem('itemName', itemName); }, [itemName]);
 
-  // Debug State
-  const [debugLogs, setDebugLogs] = useState([]);
-  const addLog = (msg) => setDebugLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 20));
+  // --- FIREBASE LOGIC START ---
 
+  // 1. Listen for Updates (Location, Meeting Point) AFTER Joining
   useEffect(() => {
-    socket.on('receive_location', (data) => {
-      // ... existing logic
-      setOtherLocations((prev) => ({
-        ...prev,
-        [data.username]: {
-          ...prev[data.username],
-          latitude: data.latitude,
-          longitude: data.longitude,
-          username: data.username,
-        },
-      }));
-    });
+    if (joined && room) {
+      // Listen to Meeting Point
+      const meetingRef = ref(database, `rooms/${room}/meetingPoint`);
+      const unsubMeeting = onValue(meetingRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setMeetingPoint(data);
+        }
+      });
 
-    socket.on('meeting_point_update', (coords) => {
-      addLog(`Meeting point updated: ${coords}`);
-      setMeetingPoint(coords);
-    });
+      // Listen to All Locations in Room
+      const locationsRef = ref(database, `rooms/${room}/locations`);
+      const unsubLocations = onValue(locationsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          // Filter out my own location
+          const others = {};
+          Object.keys(data).forEach(key => {
+            if (key !== username) {
+              others[key] = data[key];
+            }
+          });
+          setOtherLocations(others);
+        } else {
+          setOtherLocations({});
+        }
+      });
 
-    // Buyer receives info from Seller
-    socket.on('receive_transaction_info', (data) => {
-      addLog(`Received Transaction Info from ${data.sellerName}`);
-      setTransactionInfo(data);
-      setLoading(false); // Stop loading when info received
-      if (data.meetingPoint) {
-        setMeetingPoint(data.meetingPoint);
-      }
-    });
-
-
-    // Seller receives request from Buyer (who just joined)
-    socket.on('request_transaction_info', () => {
-      if (role === 'seller' && joined) {
-        socket.emit('send_transaction_info', {
-          room,
-          itemName,
-          itemImage,
-          sellerName: username,
-          sellerPhone: phone,
-          meetingPoint // Send current meeting point state
-        });
-      }
-    });
-
-    return () => {
-      socket.off('receive_location');
-      socket.off('meeting_point_update');
-      socket.off('receive_transaction_info');
-      socket.off('request_transaction_info');
+      return () => {
+        unsubMeeting();
+        unsubLocations();
+      };
     }
-  }, [role, joined, room, itemName, itemImage, username, phone]);
+  }, [joined, room, username]);
 
+  // 2. Location Tracking (GPS)
   useEffect(() => {
-    // Re-join room if socket reconnects (e.g. server restart)
-    const handleConnect = () => {
-      if (joined && room) {
-        console.log("Reconnecting to room:", room);
-        socket.emit('join_room', { room, role, username });
-      }
-    };
-
-    socket.on('connect', handleConnect);
-
-    if (joined) {
-      // Use watchPosition for real-time tracking instead of interval
+    if (joined && room && username) {
       const options = {
         enableHighAccuracy: true,
-        maximumAge: 0, // Force fresh GPS data (no cache)
-        timeout: 10000 // Wait up to 10s for high accuracy fix
+        maximumAge: 0,
+        timeout: 10000
       };
 
       const watchId = navigator.geolocation.watchPosition(
         (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-
-          // Only update if accuracy is reasonable (e.g. < 50 meters) or if it's the first update
-          // But for now we stream everything to ensure responsiveness
+          const { latitude, longitude } = position.coords;
           setMyLocation([latitude, longitude]);
 
-          socket.emit('update_location', {
-            room,
-            username,
+          // Update to Firebase
+          update(ref(database, `rooms/${room}/locations/${username}`), {
             latitude,
             longitude,
-            accuracy // Optional: could display circle radius
+            username,
+            role,
+            timestamp: Date.now()
           });
-
-          // Debug logs for location
-          // addLog(`Loc update: ${latitude.toFixed(5)}, ${longitude.toFixed(5)} (Acc: ${Math.round(accuracy)}m)`);
         },
         (error) => {
           console.error("Location error:", error);
-          addLog(`GPS Error: ${error.message}`);
         },
         options
       );
 
       return () => {
         navigator.geolocation.clearWatch(watchId);
-        socket.off('connect', handleConnect);
-      }
+        // Optional: Remove user from map when leaving (or keep last known location)
+        // remove(ref(database, `rooms/${room}/locations/${username}`));
+      };
     }
-
-    return () => {
-      socket.off('connect', handleConnect);
-    };
   }, [joined, room, username, role]);
+
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -184,7 +126,7 @@ function App() {
         const lat = parseFloat(firstResult.lat);
         const lon = parseFloat(firstResult.lon);
         setSearchCenter([lat, lon]);
-        // Optional: Auto set picking mode if finding location
+
         if (role === 'seller') {
           setPickingLocation(true);
         }
@@ -210,77 +152,77 @@ function App() {
     }
   };
 
-  const handleJoin = () => {
-    if (username && phone && room) {
-      if (role === 'seller' && (!itemName || !itemImage)) {
-        alert("Mohon lengkapi data barang dan foto");
-        return;
-      }
+  const handleCreateTransaction = async () => {
+    if (!username || !phone || !itemName || !itemImage) {
+      alert("Mohon lengkapi data barang dan foto");
+      return;
+    }
 
-      if (!socket.connected) {
-        alert("Gagal koneksi ke server. Pastikan server berjalan!");
-        return;
-      }
+    setLoading(true);
 
-      setLoading(true);
-      addLog(`Attempting to join room: ${room}...`);
-
-      // Listen for success ack
-      socket.once('room_joined_success', (data) => {
-        addLog(`Join Success! Room: ${data.room}, Members: ${data.memberCount}`);
-        setLoading(false);
-        setJoined(true);
-
-        // Role specific logic after confirmed join
-        if (role === 'seller') {
-          if (mapLink) {
-            fetch(`${backendUrl}/resolve-map-link?url=${encodeURIComponent(mapLink)}`)
-              .then(res => res.json())
-              .then(data => {
-                if (data.latitude && data.longitude) {
-                  const coords = [data.latitude, data.longitude];
-                  setMeetingPoint(coords);
-                  socket.emit('set_meeting_point', { room, coords });
-                  setPickingLocation(false);
-                } else {
-                  alert("Gagal membaca link Google Maps. Silakan set manual.");
-                  setPickingLocation(true);
-                }
-              })
-              .catch(err => {
-                console.error(err);
-                setPickingLocation(true);
-              });
-          } else {
-            setPickingLocation(true);
-          }
-        }
-
-        navigator.geolocation.getCurrentPosition((position) => {
-          const { latitude, longitude } = position.coords;
-          setMyLocation([latitude, longitude]);
-          socket.emit('update_location', { room, username, latitude, longitude });
-        });
+    // Save Transaction Info to Firebase
+    try {
+      await set(ref(database, `rooms/${room}/info`), {
+        sellerName: username,
+        sellerPhone: phone,
+        itemName,
+        itemImage,
+        createdAt: Date.now()
       });
 
-      // Emit join request
-      socket.emit('join_room', { room, role, username });
+      // Resolve Map Link if exists (Client-side regex or external API - here simplified)
+      if (mapLink) {
+        // Simple regex for lat,lng in URL
+        const regex = /[-+]?([0-9]*\.[0-9]+)[,]([-+]?([0-9]*\.[0-9]+))/;
+        const match = mapLink.match(regex);
+        if (match && match.length >= 3) {
+          const coords = [parseFloat(match[1]), parseFloat(match[2])];
+          setMeetingPoint(coords);
+          await set(ref(database, `rooms/${room}/meetingPoint`), coords);
+        } else {
+          setPickingLocation(true); // Fallback if link not parsable
+        }
+      } else {
+        setPickingLocation(true);
+      }
 
-      // Fallback timeout if server doesn't respond to join
-      setTimeout(() => {
-        setLoading((current) => {
-          if (current) {
-            alert("Server tidak merespon (Timeout). Cek koneksi internet atau server.");
-            return false;
-          }
-          return current;
-        });
-      }, 5000);
-
-    } else {
-      alert("Mohon lengkapi semua data");
+      setJoined(true);
+    } catch (err) {
+      alert("Gagal membuat transaksi: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
+
+  const handleCheckTransaction = async () => {
+    if (!room) return alert("Masukkan ID Transaksi");
+    setLoading(true);
+
+    try {
+      const snapshot = await get(child(ref(database), `rooms/${room}/info`));
+      if (snapshot.exists()) {
+        setTransactionInfo(snapshot.val());
+        // Check if meeting point is already set
+        const mpSnap = await get(child(ref(database), `rooms/${room}/meetingPoint`));
+        if (mpSnap.exists()) {
+          setMeetingPoint(mpSnap.val());
+        }
+      } else {
+        alert("ID Transaksi tidak ditemukan.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error cek transaksi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinTransaction = () => {
+    if (!username) return alert("Masukkan Nama Anda");
+    setJoined(true);
+  };
+
 
   if (!role) {
     // Role Selection Screen
@@ -308,8 +250,8 @@ function App() {
               </div>
             </button>
           </div>
-          <div className={`mt-6 text-center text-sm font-mono ${isConnected ? 'text-green-300' : 'text-red-300'}`}>
-            Status Server: {isConnected ? 'ONLINE ●' : 'OFFLINE ○'}
+          <div className="mt-6 text-center text-sm font-mono text-green-300">
+            ONLINE MODE (Firebase) ●
           </div>
         </div>
       </div>
@@ -389,7 +331,7 @@ function App() {
               </div>
 
               <button
-                onClick={handleJoin}
+                onClick={handleCreateTransaction}
                 disabled={loading}
                 className={`w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-6`}
               >
@@ -428,22 +370,7 @@ function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    if (!room) return alert("Masukkan ID Transaksi");
-                    setLoading(true);
-                    socket.emit('join_room', { room, role: 'buyer' });
-
-                    // Timeout if no response from seller
-                    setTimeout(() => {
-                      setLoading((currentLoading) => {
-                        if (currentLoading) {
-                          alert("Tidak dapat menemukan transaksi. Pastikan:\n1. ID Transaksi benar.\n2. Penjual sedang ONLINE membuka halaman transaksi.");
-                          return false;
-                        }
-                        return currentLoading;
-                      });
-                    }, 5000);
-                  }}
+                  onClick={handleCheckTransaction}
                   disabled={loading}
                   className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-6"
                 >
@@ -460,7 +387,7 @@ function App() {
                   <div className="flex justify-center items-center gap-2 text-sm text-gray-600 mt-1">
                     <User className="w-4 h-4" /> <span>{transactionInfo.sellerName}</span>
                   </div>
-                  <div className="mt-2 text-xs bg-green-100 text-green-700 py-1 px-3 rounded-full inline-block">ID: {room} • Online</div>
+                  <div className="mt-2 text-xs bg-green-100 text-green-700 py-1 px-3 rounded-full inline-block">ID: {room}</div>
                 </div>
 
                 <div className="border-t border-dashed border-gray-300"></div>
@@ -483,7 +410,7 @@ function App() {
                 </div>
 
                 <button
-                  onClick={handleJoin}
+                  onClick={handleJoinTransaction}
                   disabled={loading}
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
                 >
@@ -491,16 +418,6 @@ function App() {
                 </button>
               </div>
             )}
-          </div>
-        </div>
-        {/* Debug Logs (Temporary for troubleshooting) */}
-        <div className="mt-8 p-4 bg-black/80 text-green-400 font-mono text-xs rounded-xl overflow-hidden">
-          <p className="font-bold border-b border-gray-600 mb-2 pb-1">Debug Info:</p>
-          <div className="h-24 overflow-y-auto space-y-1">
-            {debugLogs.map((log, i) => (
-              <div key={i}>{log}</div>
-            ))}
-            {debugLogs.length === 0 && <div>Waiting for logs...</div>}
           </div>
         </div>
       </div>
@@ -577,7 +494,7 @@ function App() {
           if (pickingLocation) {
             const coords = [latlng.lat, latlng.lng];
             setMeetingPoint(coords);
-            socket.emit('set_meeting_point', { room, coords });
+            set(ref(database, `rooms/${room}/meetingPoint`), coords); // DB update
             setPickingLocation(false);
           }
         }}
