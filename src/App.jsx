@@ -250,9 +250,7 @@ function App() {
               </div>
             </button>
           </div>
-          <div className="mt-6 text-center text-sm font-mono text-green-300">
-            ONLINE MODE (Firebase) ●
-          </div>
+
         </div>
       </div>
     )
