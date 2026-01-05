@@ -261,6 +261,7 @@ function App() {
     return (
       <div className="h-screen w-full flex items-center justify-center p-6 bg-gradient-to-br from-blue-600 to-indigo-800">
         <div className="glass rounded-3xl p-8 w-full max-w-md shadow-2xl text-center">
+          <img src="/logo.png" alt="Logo" className="w-32 mx-auto mb-6 hover:scale-105 transition-transform" />
           <h1 className="text-3xl font-bold text-white mb-8">Pilih Peran Anda</h1>
           <div className="space-y-4">
             <button onClick={() => { setRole('seller'); const id = 'TRX-' + Math.floor(Math.random() * 10000); setRoom(id); }} className="w-full glass bg-white/40 hover:bg-white/60 p-6 rounded-2xl flex items-center gap-4 transition-all group border border-white/40 text-left shadow-sm hover:shadow-md">
@@ -479,6 +480,7 @@ function App() {
 
         <div className="glass bg-white/90 p-3 rounded-2xl shadow-lg flex justify-between items-center pointer-events-auto">
           <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain" />
             <div className={`p-2 rounded-full ${role === 'seller' ? 'bg-orange-100' : 'bg-green-100'}`}>
               <Radio className={`w-4 h-4 animate-pulse ${role === 'seller' ? 'text-orange-600' : 'text-green-600'}`} />
             </div>
