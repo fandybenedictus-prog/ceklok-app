@@ -35,10 +35,20 @@ function RecenterMap({ location, disableAutoCenter }) {
     return null;
 }
 
-const MapComponent = ({ myLocation, otherLocations, meetingPoint, onSetMeetingPoint, searchCenter, isPicking }) => {
+const MapComponent = ({ myLocation, otherLocations, meetingPoint, onSetMeetingPoint, searchCenter, isPicking, role }) => {
     // Default center if no location (Indonesia)
     const defaultCenter = [-0.7893, 113.9213];
     const center = myLocation || defaultCenter;
+
+    // Green Icon for Buyer
+    const greenIcon = new L.Icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+    });
 
     return (
         <MapContainer center={center} zoom={13} scrollWheelZoom={true} className="h-full w-full z-0">
@@ -54,18 +64,19 @@ const MapComponent = ({ myLocation, otherLocations, meetingPoint, onSetMeetingPo
             {searchCenter && <RecenterMap location={searchCenter} disableAutoCenter={false} />}
 
             {myLocation && (
-                <Marker position={myLocation}>
+                <Marker position={myLocation} icon={role === 'buyer' ? greenIcon : undefined}>
                     <Popup>
-                        You are here
+                        You are here ({role === 'buyer' ? 'Pembeli' : 'Penjual'})
                     </Popup>
                 </Marker>
             )}
 
             {Object.entries(otherLocations).map(([id, user]) => (
-                <Marker key={id} position={[user.latitude, user.longitude]}>
+                <Marker key={id} position={[user.latitude, user.longitude]} icon={user.role === 'buyer' ? greenIcon : undefined}>
                     <Popup>
                         <div className="text-center">
                             <h3 className="font-bold">{user.username}</h3>
+                            <p className="text-xs text-gray-500 mb-1">({user.role === 'buyer' ? 'Pembeli' : 'Penjual'})</p>
                             <a
                                 href={`https://www.google.com/maps/dir/?api=1&destination=${user.latitude},${user.longitude}`}
                                 target="_blank"

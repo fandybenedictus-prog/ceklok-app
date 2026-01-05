@@ -231,22 +231,22 @@ function App() {
         <div className="glass rounded-3xl p-8 w-full max-w-md shadow-2xl text-center">
           <h1 className="text-3xl font-bold text-white mb-8">Pilih Peran Anda</h1>
           <div className="space-y-4">
-            <button onClick={() => { setRole('seller'); const id = 'TRX-' + Math.floor(Math.random() * 10000); setRoom(id); }} className="w-full glass bg-white/10 hover:bg-white/20 p-6 rounded-2xl flex items-center gap-4 transition-all group border border-white/20 text-left">
+            <button onClick={() => { setRole('seller'); const id = 'TRX-' + Math.floor(Math.random() * 10000); setRoom(id); }} className="w-full glass bg-white/40 hover:bg-white/60 p-6 rounded-2xl flex items-center gap-4 transition-all group border border-white/40 text-left shadow-sm hover:shadow-md">
               <div className="bg-orange-500 p-4 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform">
                 <ShoppingBag className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">Saya Penjual</h3>
-                <p className="text-blue-200 text-sm">Jual barang & tentukan lokasi</p>
+                <h3 className="text-xl font-bold text-gray-800">Saya Penjual</h3>
+                <p className="text-gray-600 text-sm">Jual barang & tentukan lokasi</p>
               </div>
             </button>
-            <button onClick={() => setRole('buyer')} className="w-full glass bg-white/10 hover:bg-white/20 p-6 rounded-2xl flex items-center gap-4 transition-all group border border-white/20 text-left">
+            <button onClick={() => setRole('buyer')} className="w-full glass bg-white/40 hover:bg-white/60 p-6 rounded-2xl flex items-center gap-4 transition-all group border border-white/40 text-left shadow-sm hover:shadow-md">
               <div className="bg-green-500 p-4 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform">
                 <User className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">Saya Pembeli</h3>
-                <p className="text-blue-200 text-sm">Cari barang & temui penjual</p>
+                <h3 className="text-xl font-bold text-gray-800">Saya Pembeli</h3>
+                <p className="text-gray-600 text-sm">Cari barang & temui penjual</p>
               </div>
             </button>
           </div>
